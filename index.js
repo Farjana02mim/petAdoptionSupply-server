@@ -28,7 +28,7 @@ const client = new MongoClient(uri, {
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization)
-    return res.status(401).send({ message: "Unauthorized! Token not found." });
+    return res.status(401).send({ message: "Token not found." });
 
   const token = authorization.split(" ")[1];
   try {
