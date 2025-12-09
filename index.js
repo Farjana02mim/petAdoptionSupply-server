@@ -28,7 +28,7 @@ const client = new MongoClient(uri, {
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization)
-    return res.status(401).send({ message: "Token not found." });
+    return res.status(401).send({ message: "Unauthorized! Token not found." });
 
   const token = authorization.split(" ")[1];
   try {
@@ -110,7 +110,7 @@ async function run() {
         res.status(500).send({ success: false, message: err.message });
       }
     });
-    app.get("/my-models", verifyToken, async (req, res) => {
+    app.get("/listings", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const result = await listCollection.find({ created_by: email }).toArray();
