@@ -1,4 +1,3 @@
-// index.js
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -13,12 +12,10 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Firebase Admin
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// MongoDB Connection
 const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -28,7 +25,6 @@ const client = new MongoClient(uri, {
   },
 });
 
-// Verify Firebase Token Middleware
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization)
@@ -43,14 +39,12 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-// Main DB Function
 async function run() {
   try {
     const petDB = client.db("pet-adoption");
     const listCollection = petDB.collection("listing");
     const ordersCollection = petDB.collection("orders");
 
-    // GET all listings
     app.get("/listing", async (req, res) => {
       try {
         const result = await listCollection.find().toArray();
@@ -60,7 +54,6 @@ async function run() {
       }
     });
 
-    // GET listings by category
     app.get("/category/:categoryName", async (req, res) => {
       try {
         const categoryName = req.params.categoryName;
@@ -71,7 +64,6 @@ async function run() {
       }
     });
 
-    // GET single listing (protected)
     app.get("/listing/:id", verifyToken, async (req, res) => {
       try {
         const result = await listCollection.findOne({ _id: new ObjectId(req.params.id) });
@@ -81,19 +73,16 @@ async function run() {
       }
     });
 
-    // POST new listing
     app.post("/listing", async (req, res) => {
       try {
         const data = req.body;
-        data.created_at = new Date(); // add timestamp
+        data.created_at = new Date();
         const result = await listCollection.insertOne(data);
         res.send({ success: true, result });
       } catch (err) {
         res.status(500).send({ success: false, message: err.message });
       }
     });
-
-    // UPDATE listing
     app.put("/listing/:id", async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
@@ -104,8 +93,6 @@ async function run() {
         res.status(500).send({ success: false, message: err.message });
       }
     });
-
-    // DELETE listing
     app.delete("/listing/:id", async (req, res) => {
       try {
         const result = await listCollection.deleteOne({ _id: new ObjectId(req.params.id) });
@@ -115,7 +102,6 @@ async function run() {
       }
     });
 
-    // Latest 6 listings
     app.get("/latest-list", async (req, res) => {
       try {
         const result = await listCollection.find().sort({ created_at: -1 }).limit(6).toArray();
@@ -124,8 +110,6 @@ async function run() {
         res.status(500).send({ success: false, message: err.message });
       }
     });
-
-    // Get user's listings (protected)
     app.get("/my-models", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
@@ -136,7 +120,6 @@ async function run() {
       }
     });
 
-    // POST order
     app.post("/orders/:id", async (req, res) => {
       try {
         const data = req.body;
@@ -154,7 +137,6 @@ async function run() {
       }
     });
 
-    // Get user's downloads (protected)
     app.get("/my-downloads", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
@@ -164,8 +146,6 @@ async function run() {
         res.status(500).send({ success: false, message: err.message });
       }
     });
-
-    // Search listings
     app.get("/search", async (req, res) => {
       try {
         const search = req.query.search;
@@ -180,19 +160,16 @@ async function run() {
 
     console.log("Server Connected to MongoDB successfully!");
   } finally {
-    // Optional: you can close client if needed
+    
   }
 }
 
-// Run DB connection
 run().catch(console.dir);
 
-// Root route
 app.get("/", (req, res) => {
   res.send("Server is running fine!");
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`Server is listening on port ${port}`);
 });
