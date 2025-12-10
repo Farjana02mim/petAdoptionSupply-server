@@ -9,7 +9,7 @@ const serviceAccount = require("./serviceKey.json");
 const app = express();
 const port = process.env.PORT || 3000;
 
-
+// CORS
 const corsOptions = {
   origin: [
     'http://localhost:5173',                  // dev
@@ -72,10 +72,12 @@ async function run() {
       }
     });
 
-    // Get all listings
+    // Get all listings or listings by email
     app.get("/listing", async (req, res) => {
       try {
-        const result = await listCollection.find().toArray();
+        const email = req.query.email;
+        const query = email ? { email: email } : {};
+        const result = await listCollection.find(query).toArray();
         res.send(result);
       } catch (err) {
         res.status(500).send({ success: false, message: err.message });
@@ -181,21 +183,20 @@ async function run() {
     });
 
     // Delete order
-app.delete("/orders/:id", verifyToken, async (req, res) => {
-  try {
-    const id = req.params.id;
-    const result = await ordersCollection.deleteOne({ _id: new ObjectId(id) });
+    app.delete("/orders/:id", verifyToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await ordersCollection.deleteOne({ _id: new ObjectId(id) });
 
-    if (result.deletedCount > 0) {
-      res.send({ success: true });
-    } else {
-      res.send({ success: false, message: "Delete failed" });
-    }
-  } catch (err) {
-    res.status(500).send({ success: false, message: err.message });
-  }
-});
-
+        if (result.deletedCount > 0) {
+          res.send({ success: true });
+        } else {
+          res.send({ success: false, message: "Delete failed" });
+        }
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
 
     // My downloads
     app.get("/my-downloads", verifyToken, async (req, res) => {
@@ -212,7 +213,7 @@ app.delete("/orders/:id", verifyToken, async (req, res) => {
 
     console.log("MongoDB Connected ✅");
   } finally {
-    // do not close client
+    // Do not close client
   }
 }
 
