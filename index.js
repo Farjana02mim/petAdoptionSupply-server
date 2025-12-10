@@ -21,8 +21,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-
 app.use(express.json()); // For parsing JSON bodies
 
 // Firebase Admin
@@ -209,7 +207,7 @@ async function run() {
 
     console.log("Server Connected to MongoDB successfully!");
   } finally {
-    // Optionally close MongoDB connection when app stops
+    // optionally close client if needed
   }
 }
 
