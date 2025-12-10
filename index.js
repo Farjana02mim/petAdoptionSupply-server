@@ -9,19 +9,18 @@ const serviceAccount = require("./serviceKey.json");
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ✅ CORS Fix: Include both development and production frontend URLs
+
 const corsOptions = {
   origin: [
-    'http://localhost:5173',                  // local development
-    'https://pet-adoption-supply.web.app'    // production frontend
+    'http://localhost:5173',                  // dev
+    'https://pet-adoption-supply.web.app'    // production
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
-
 app.use(cors(corsOptions));
-app.use(express.json()); // For parsing JSON bodies
+app.use(express.json());
 
 // Firebase Admin
 admin.initializeApp({
@@ -29,8 +28,7 @@ admin.initializeApp({
 });
 
 // MongoDB
-const uri = process.env.MONGO_URI;
-const client = new MongoClient(uri, {
+const client = new MongoClient(process.env.MONGO_URI, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
@@ -38,96 +36,29 @@ const client = new MongoClient(uri, {
   },
 });
 
-// middleware: verify Firebase token
+// Verify Firebase Token
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization) {
     req.user = null;
     return next();
   }
-
   const token = authorization.split(" ")[1];
   try {
     await admin.auth().verifyIdToken(token);
     next();
-  } catch (error) {
+  } catch (err) {
     return res.status(401).send({ message: "Unauthorized! Invalid token." });
   }
 };
 
 async function run() {
   try {
-    await client.connect();
-    const petDB = client.db("pet-adoption");
-    const listCollection = petDB.collection("listing");
-    const ordersCollection = petDB.collection("orders");
+    const db = client.db("pet-adoption");
+    const listCollection = db.collection("listing");
+    const ordersCollection = db.collection("orders");
 
-    // Listing endpoints
-    app.get("/listing", async (req, res) => {
-      try {
-        const result = await listCollection.find().toArray();
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.get("/category/:categoryName", async (req, res) => {
-      try {
-        const categoryName = req.params.categoryName;
-        const result = await listCollection
-          .find({ category: categoryName })
-          .toArray();
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.get("/listing/:id", verifyToken, async (req, res) => {
-      try {
-        const result = await listCollection.findOne({
-          _id: new ObjectId(req.params.id),
-        });
-        res.send({ success: true, result });
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.post("/listing", async (req, res) => {
-      try {
-        const data = req.body;
-        data.created_at = new Date();
-        const result = await listCollection.insertOne(data);
-        res.send({ success: true, result });
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.put("/listing/:id", async (req, res) => {
-      try {
-        const filter = { _id: new ObjectId(req.params.id) };
-        const update = { $set: req.body };
-        const result = await listCollection.updateOne(filter, update);
-        res.send({ success: true, result });
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.delete("/listing/:id", async (req, res) => {
-      try {
-        const result = await listCollection.deleteOne({
-          _id: new ObjectId(req.params.id),
-        });
-        res.send({ success: true, result });
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
+    // Get latest 6 listings
     app.get("/latest-list", async (req, res) => {
       try {
         const result = await listCollection
@@ -141,35 +72,132 @@ async function run() {
       }
     });
 
-    app.get("/listings", verifyToken, async (req, res) => {
+    // Get all listings
+    app.get("/listing", async (req, res) => {
       try {
-        const email = req.query.email;
-        const result = await listCollection.find({ email: email }).toArray();
+        const result = await listCollection.find().toArray();
         res.send(result);
       } catch (err) {
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
-    // Orders
-    app.post("/orders/:id", async (req, res) => {
+    // Add Listing
+    app.post("/listing", async (req, res) => {
       try {
         const data = req.body;
-        const id = req.params.id;
-
-        const result = await ordersCollection.insertOne(data);
-
-        const downloadCounted = await listCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $inc: { downloads: 1 } }
-        );
-
-        res.send({ result, downloadCounted });
+        data.created_at = new Date();
+        const result = await listCollection.insertOne(data);
+        res.send({ success: true, result });
       } catch (err) {
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
+    // Update Listing
+    app.put("/listing/:id", verifyToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const data = req.body;
+
+        const result = await listCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: data }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ success: true, result });
+        } else {
+          res.send({ success: false, message: "Update failed" });
+        }
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Delete Listing
+    app.delete("/listing/:id", verifyToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await listCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount > 0) {
+          res.send({ success: true });
+        } else {
+          res.send({ success: false, message: "Delete failed" });
+        }
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Get category listings
+    app.get("/category/:categoryName", async (req, res) => {
+      try {
+        const result = await listCollection
+          .find({ category: req.params.categoryName })
+          .toArray();
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Search
+    app.get("/search", async (req, res) => {
+      try {
+        const search = req.query.search || "";
+        const result = await listCollection
+          .find({ name: { $regex: search, $options: "i" } })
+          .toArray();
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Listing by ID (with token)
+    app.get("/listing/:id", verifyToken, async (req, res) => {
+      try {
+        const result = await listCollection.findOne({ _id: new ObjectId(req.params.id) });
+        res.send({ success: true, result });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Orders
+    app.post("/orders/:id", verifyToken, async (req, res) => {
+      try {
+        const data = req.body;
+        const id = req.params.id;
+        const result = await ordersCollection.insertOne(data);
+        await listCollection.updateOne({ _id: new ObjectId(id) }, { $inc: { downloads: 1 } });
+        res.send({ success: true, result });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Delete order
+app.delete("/orders/:id", verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await ordersCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount > 0) {
+      res.send({ success: true });
+    } else {
+      res.send({ success: false, message: "Delete failed" });
+    }
+  } catch (err) {
+    res.status(500).send({ success: false, message: err.message });
+  }
+});
+
+
+    // My downloads
     app.get("/my-downloads", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
@@ -182,32 +210,9 @@ async function run() {
       }
     });
 
-    app.delete("/orders/:id", verifyToken, async (req, res) => {
-      try {
-        const result = await ordersCollection.deleteOne({
-          _id: new ObjectId(req.params.id),
-        });
-        res.send({ success: true, result });
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    app.get("/search", async (req, res) => {
-      try {
-        const search = req.query.search;
-        const result = await listCollection
-          .find({ name: { $regex: search, $options: "i" } })
-          .toArray();
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ success: false, message: err.message });
-      }
-    });
-
-    console.log("Server Connected to MongoDB successfully!");
+    console.log("MongoDB Connected ✅");
   } finally {
-    // optionally close client if needed
+    // do not close client
   }
 }
 
@@ -217,6 +222,4 @@ app.get("/", (req, res) => {
   res.send("Server is running fine!");
 });
 
-app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
-});
+app.listen(port, () => console.log(`Server listening on port ${port} 🚀`));
