@@ -9,8 +9,21 @@ const serviceAccount = require("./serviceKey.json");
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
+// ✅ CORS Fix: Include both development and production frontend URLs
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',                  // local development
+    'https://pet-adoption-supply.web.app'    // production frontend
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+app.use(express.json()); // For parsing JSON bodies
 
 // Firebase Admin
 admin.initializeApp({
@@ -19,7 +32,6 @@ admin.initializeApp({
 
 // MongoDB
 const uri = process.env.MONGO_URI;
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -28,11 +40,13 @@ const client = new MongoClient(uri, {
   },
 });
 
-// middleware
+// middleware: verify Firebase token
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
-  if (!authorization)
-    return res.status(401).send({ message: "Unauthorized! Token not found." });
+  if (!authorization) {
+    req.user = null;
+    return next();
+  }
 
   const token = authorization.split(" ")[1];
   try {
@@ -45,10 +59,12 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
+    await client.connect();
     const petDB = client.db("pet-adoption");
     const listCollection = petDB.collection("listing");
     const ordersCollection = petDB.collection("orders");
 
+    // Listing endpoints
     app.get("/listing", async (req, res) => {
       try {
         const result = await listCollection.find().toArray();
@@ -137,6 +153,7 @@ async function run() {
       }
     });
 
+    // Orders
     app.post("/orders/:id", async (req, res) => {
       try {
         const data = req.body;
@@ -192,7 +209,7 @@ async function run() {
 
     console.log("Server Connected to MongoDB successfully!");
   } finally {
-    
+    // Optionally close MongoDB connection when app stops
   }
 }
 
